@@ -242,6 +242,10 @@ canvas.spark{width:68px !important;height:24px !important;}
       <canvas class="leg-bar" id="legCanvas" width="200" height="10" style="width:100%;height:10px;border-radius:4px;"></canvas>
       <div class="leg-ticks" id="legTicks"></div>
       <div class="leg-ends"><span class="leg-lo" id="legLo">Lower</span><span class="leg-hi" id="legHi">Higher</span></div>
+      <div id="legNotRanked" style="display:none;gap:6px;align-items:center;margin-top:7px;padding-top:6px;border-top:1px solid var(--border)">
+        <div class="nr-swatch" style="width:12px;height:12px;border-radius:3px;flex-shrink:0;"></div>
+        <span style="font-size:.58rem;color:var(--text3)">Not in state top 10</span>
+      </div>
       <div class="leg-note">Source: <span id="legSrc">AVMA · Estimated</span></div>
     </div>
     <div class="map-hint">Click a state to explore · Select a breed to see its range</div>
@@ -325,10 +329,17 @@ function ownColor(rate){
   const t = Math.min(1,Math.max(0,(rate-OWN_LO)/(OWN_HI-OWN_LO)));
   return lerp(pal(), t);
 }
+// A palette-independent "no data" color used for states not in a breed's top-10.
+// Fixed neutral slate — clearly visible against the dark background and
+// clearly NOT part of any ranked palette gradient.
+const NOT_RANKED = "#1e2030";
+
 function breedColor(abbr){
   const idx = (SDATA[abbr]?.breeds||[]).indexOf(S.breed);
-  if(idx<0) return lerp(pal(),0)+"55";       // not in top-10 → muted lightest
-  return lerp(pal(), Math.max(.12, 1-idx/9)); // rank1=1.0 darkest, rank10=0.12 lightest
+  if(idx < 0) return NOT_RANKED;
+  // Ranked: idx=0 (rank #1) → t=1 darkest;  idx=9 (rank #10) → t=0 lightest
+  const t = (9 - idx) / 9;
+  return lerp(pal(), t);
 }
 function stateColor(abbr){
   return S.metric==="breed"&&S.breed ? breedColor(abbr) : ownColor(SDATA[abbr]?.ownershipRate||38);
@@ -414,34 +425,92 @@ function applyColors(){
    LEGEND
 ════════════════════════════════════════ */
 function drawLegend(){
-  const cv=document.getElementById("legCanvas");
-  const ctx=cv.getContext("2d");
-  const stops=pal();
-  const g=ctx.createLinearGradient(0,0,cv.width,0);
-  stops.forEach((c,i)=>g.addColorStop(i/(stops.length-1),c));
-  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
+  const cv  = document.getElementById("legCanvas");
+  const ctx = cv.getContext("2d");
+  const W   = cv.width, H = cv.height;
+  const title = document.getElementById("legTitle");
+  const ticks = document.getElementById("legTicks");
+  const lo    = document.getElementById("legLo");
+  const hi    = document.getElementById("legHi");
+  const src   = document.getElementById("legSrc");
 
-  const title=document.getElementById("legTitle");
-  const ticks=document.getElementById("legTicks");
-  const lo=document.getElementById("legLo");
-  const hi=document.getElementById("legHi");
-  const src=document.getElementById("legSrc");
+  ctx.clearRect(0, 0, W, H);
 
-  if(S.metric==="ownership"){
-    title.textContent="Dog Ownership Rate";
-    const range=OWN_HI-OWN_LO;
-    ticks.innerHTML=[0,.25,.5,.75,1].map(t=>`<span>${Math.round(OWN_LO+t*range)}%</span>`).join('');
-    lo.textContent="Low"; hi.textContent="High";
-    src.innerHTML="AVMA · <em>Estimated</em>";
+  if(S.metric === "ownership"){
+    // ── Ownership mode: full palette gradient, lightest→darkest ──────────
+    const g = ctx.createLinearGradient(0, 0, W, 0);
+    pal().forEach((c,i) => g.addColorStop(i/(pal().length-1), c));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    title.textContent = "Dog Ownership Rate";
+    ticks.style.cssText = "display:flex;justify-content:space-between;height:auto;position:static;";
+    const range = OWN_HI - OWN_LO;
+    ticks.innerHTML = [0,.25,.5,.75,1].map(t=>`<span>${Math.round(OWN_LO+t*range)}%</span>`).join('');
+    lo.textContent = "Lower"; hi.textContent = "Higher";
+    src.innerHTML  = "AVMA · <em>Estimated</em>";
+
   } else if(S.breed){
-    title.textContent=S.breed+" — State Popularity";
-    ticks.innerHTML=["None","#10","#5","#3","#1"].map(t=>`<span>${t}</span>`).join('');
-    lo.textContent="Not ranked"; hi.textContent="#1 in state";
-    src.innerHTML="City licensing · <em>Derived</em>";
+    // ── Breed mode: two-zone bar ──────────────────────────────────────────
+    // Zone A (left 18%): NOT_RANKED flat color — same color used on map for unranked states
+    // Zone B (right 82%): palette gradient lightest (rank #10) → darkest (rank #1)
+    //
+    // The math MUST match breedColor exactly:
+    //   rank #10 (idx=9): t=(9-9)/9=0  → lerp(pal(),0) = pal()[0]   = left edge of Zone B
+    //   rank #1  (idx=0): t=(9-0)/9=1  → lerp(pal(),1) = pal()[last] = right edge of Zone B
+
+    const ZONE_A = 0.18;   // fraction of bar for "not ranked"
+    const ZONE_B = 1 - ZONE_A;
+
+    // Zone A
+    ctx.fillStyle = NOT_RANKED;
+    ctx.fillRect(0, 0, W*ZONE_A, H);
+
+    // Thin divider
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fillRect(W*ZONE_A, 0, 1.5, H);
+
+    // Zone B — gradient from pal()[0] (lightest/rank10) to pal()[last] (darkest/rank1)
+    const g = ctx.createLinearGradient(W*ZONE_A, 0, W, 0);
+    pal().forEach((c,i) => g.addColorStop(i/(pal().length-1), c));
+    ctx.fillStyle = g;
+    ctx.fillRect(W*ZONE_A + 1.5, 0, W*ZONE_B - 1.5, H);
+
+    // Ticks: each tick's x-position mirrors the breedColor math
+    // rank k: t=(9-(k-1))/9, position in Zone B = t * ZONE_B
+    // → bar position = ZONE_A + t * ZONE_B
+    // Special: "None" centered in Zone A at ZONE_A/2
+    const rankTicks = [10, 7, 5, 3, 1];
+    const tickDefs = [
+      { l: "None", p: ZONE_A / 2 },
+      ...rankTicks.map(k => {
+        const t = (9-(k-1)) / 9;           // t in [0,1]
+        return { l: "#"+k, p: ZONE_A + t * ZONE_B };
+      })
+    ];
+
+    ticks.style.cssText = "position:relative;height:14px;display:block;";
+    ticks.innerHTML = tickDefs.map(({l,p}) =>
+      `<span style="position:absolute;left:${(p*100).toFixed(1)}%;transform:translateX(-50%);` +
+      `font-size:.56rem;color:var(--text3);white-space:nowrap">${l}</span>`
+    ).join('');
+
+    title.textContent = S.breed + " — State Popularity";
+    lo.textContent    = "Not ranked";
+    hi.textContent    = "#1 in state";
+    src.innerHTML     = "City licensing · <em>Derived</em>";
+
   } else {
-    title.textContent="Select a breed to see distribution";
-    ticks.innerHTML=""; lo.textContent=""; hi.textContent="";
-    src.innerHTML="";
+    // ── No breed selected ─────────────────────────────────────────────────
+    const g = ctx.createLinearGradient(0, 0, W, 0);
+    pal().forEach((c,i) => g.addColorStop(i/(pal().length-1), c));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    title.textContent = "Select a metric or breed";
+    ticks.style.cssText = "display:flex;justify-content:space-between;height:auto;position:static;";
+    ticks.innerHTML = "";
+    lo.textContent = ""; hi.textContent = ""; src.innerHTML = "";
   }
 }
 
