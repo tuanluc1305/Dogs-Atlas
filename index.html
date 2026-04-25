@@ -293,7 +293,7 @@ canvas.spark{width:68px !important;height:24px !important;}
     <table class="nrt">
       <thead><tr>
         <th>Rank</th><th>Breed</th><th>Group</th>
-        <th class="nty">Year</th><th class="nty">2024</th><th class="nty">2023</th>
+        <th class="nty" id="nrtYearCol">2025</th><th class="nty">2024</th><th class="nty">2023</th>
         <th class="ntd">Δ1yr</th><th class="ntd">Δ10yr</th><th>Trend</th>
       </tr></thead>
       <tbody id="nrtBody"></tbody>
@@ -600,6 +600,7 @@ function initControls(){
     S.year=+this.value;
     document.getElementById("yrVal").textContent=S.year;
     document.getElementById("rkYr").textContent=S.year;
+  const yh=document.getElementById("nrtYearCol"); if(yh) yh.textContent=S.year;
     renderTable();
     if(S.breed) renderBreed(S.breed);
   };
