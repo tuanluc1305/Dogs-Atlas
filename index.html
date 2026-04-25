@@ -39,7 +39,9 @@ header{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border)
 .sdi:hover{background:var(--bg3);}
 .sdi-lbl{font-size:.8rem;font-weight:500;flex:1;}
 .sdi-b{font-size:.6rem;padding:1px 6px;border-radius:12px;font-weight:500;}
-.hbadge{margin-left:auto;font-size:.62rem;padding:2px 8px;border-radius:12px;background:rgba(232,160,32,.1);color:var(--gold);border:1px solid rgba(232,160,32,.18);white-space:nowrap;flex-shrink:0;}
+.hbadge{font-size:.62rem;padding:2px 8px;border-radius:12px;background:rgba(232,160,32,.1);color:var(--gold);border:1px solid rgba(232,160,32,.18);white-space:nowrap;flex-shrink:0;}
+.dev-credit{margin-left:auto;font-size:.68rem;color:var(--text3);white-space:nowrap;flex-shrink:0;letter-spacing:.01em;}
+.dev-credit strong{color:var(--gold2);font-weight:600;}
 
 /* CONTROLS */
 .controls{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);padding:7px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
@@ -140,7 +142,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 .gdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle;}
 .gtag{display:inline-block;font-size:.6rem;padding:1px 6px;border-radius:10px;font-weight:500;border:1px solid transparent;}
 /* Breed panel */
-.bpimg{width:100%;aspect-ratio:16/9;background:var(--bg3);border-radius:var(--r);overflow:hidden;position:relative;margin-bottom:12px;border:1px solid var(--border);}
+.bpimg{width:100%;aspect-ratio:4/3;background:#0a0c14;border-radius:var(--r);overflow:hidden;position:relative;margin-bottom:12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;}
+.bpimg img{width:100%;height:100%;object-fit:contain;background:#0a0c14;}
 .bpimg img{width:100%;height:100%;object-fit:cover;}
 .bpph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.2rem;opacity:.2;}
 .bpcred{position:absolute;bottom:5px;right:7px;font-size:.56rem;color:rgba(255,255,255,.3);}
@@ -211,6 +214,7 @@ canvas.spark{width:68px !important;height:24px !important;}
     <div class="sd" id="searchDrop"></div>
   </div>
   <span class="hbadge">200 breeds · 2013–2023 · AKC</span>
+  <span class="dev-credit">Developed by <strong>Luc Lu</strong></span>
 </header>
 
 <div class="controls">
@@ -675,11 +679,158 @@ function renderBreed(breed){
     <table class="rtt"><thead><tr><th>#</th><th>State</th><th></th></tr></thead><tbody>${strows}</tbody></table>
   </div>`;
 
-  if(m.ceo) fetch(`https://dog.ceo/api/breed/${m.ceo}/images/random`)
-    .then(r=>r.json()).then(data=>{
-      const w=document.getElementById("bpImg");
-      if(w&&data.status==="success") w.innerHTML=`<img src="${data.message}" alt="${breed}" onerror="this.parentElement.innerHTML='<div class=\'bpph\'>🐕</div>'"><div class="bpcred">Dog CEO API</div>`;
-    }).catch(()=>{});
+  // Fetch breed photo from Wikipedia REST API — returns the canonical,
+  // consistent profile photo for each breed (same image every time).
+  // Wikipedia images are CC-licensed and CORS-accessible.
+  (function fetchBreedPhoto(breedName){
+
+    // ── Breeds to fetch from Dog CEO API instead of Wikipedia ──────────────
+    // These breeds have a composite / multi-photo collage as their Wikipedia
+    // main image, which cannot be fixed with CSS alone.
+    const FORCE_CEO = {
+      "Belgian Malinois":         "malinois",
+      "Belgian Sheepdog":         "malinois",
+      "Poodle":                   "poodle/standard",
+      "Pointer":                  "pointer",
+    };
+
+    // ── Wikipedia article slug overrides ────────────────────────────────────
+    // Breed name → exact Wikipedia article title (underscores for spaces).
+    // Covers: place-name disambigs, word disambigs, alternate article titles.
+    const WIKI = {
+      // ── Place-name disambiguations ────────────────────────────
+      "Brittany":                      "Brittany_(dog)",
+      "Maltese":                       "Maltese_dog",
+      "Havanese":                      "Havanese_dog",
+      "Pomeranian":                    "Pomeranian_dog",
+      "Dalmatian":                     "Dalmatian_dog",
+      "Newfoundland":                  "Newfoundland_dog",
+      "Samoyed":                       "Samoyed_dog",
+      "Leonberger":                    "Leonberger",
+      "Vizsla":                        "Vizsla",
+      "Keeshond":                      "Keeshond",
+      "Bichon Frise":                  "Bichon_Frisé",
+
+      // ── Word/concept disambiguations ──────────────────────────
+      "Boxer":                         "Boxer_(dog)",
+      "Akita":                         "Akita_(dog)",
+      "Chihuahua":                     "Chihuahua_(dog)",
+      "Papillon":                      "Papillon_(dog)",
+      "Saint Bernard":                 "Saint_Bernard_(dog)",
+      "Bulldog":                       "Bulldog",
+      "Greyhound":                     "Greyhound",
+      "Whippet":                       "Whippet",
+      "Mastiff":                       "Mastiff",
+      "Bloodhound":                    "Bloodhound",
+      "Pointer":                       "Pointer_(dog_breed)",
+
+      // ── AKC name differs from Wikipedia article title ─────────
+      "German Shepherd Dog":           "German_Shepherd_Dog",
+      "Labrador Retriever":            "Labrador_Retriever",
+      "Golden Retriever":              "Golden_Retriever",
+      "French Bulldog":                "French_Bulldog",
+      "German Shorthaired Pointer":    "German_Shorthaired_Pointer",
+      "German Wirehaired Pointer":     "German_Wirehaired_Pointer",
+      "Pembroke Welsh Corgi":          "Pembroke_Welsh_Corgi",
+      "Cardigan Welsh Corgi":          "Cardigan_Welsh_Corgi",
+      "Australian Shepherd":           "Australian_Shepherd",
+      "Australian Cattle Dog":         "Australian_Cattle_Dog",
+      "Yorkshire Terrier":             "Yorkshire_Terrier",
+      "Cavalier King Charles Spaniel": "Cavalier_King_Charles_Spaniel",
+      "Doberman Pinscher":             "Dobermann",
+      "Cane Corso":                    "Cane_Corso",
+      "Miniature Schnauzer":           "Miniature_Schnauzer",
+      "Standard Schnauzer":            "Standard_Schnauzer",
+      "Giant Schnauzer":               "Giant_Schnauzer",
+      "Great Dane":                    "Great_Dane",
+      "Shih Tzu":                      "Shih_Tzu",
+      "Siberian Husky":                "Siberian_Husky",
+      "Bernese Mountain Dog":          "Bernese_Mountain_Dog",
+      "Boston Terrier":                "Boston_Terrier",
+      "Shetland Sheepdog":             "Shetland_Sheepdog",
+      "Border Collie":                 "Border_Collie",
+      "Cocker Spaniel":                "American_Cocker_Spaniel",
+      "English Springer Spaniel":      "English_Springer_Spaniel",
+      "English Cocker Spaniel":        "English_Cocker_Spaniel",
+      "Collie":                        "Rough_Collie",
+      "Belgian Malinois":              "Belgian_Malinois",
+      "Belgian Sheepdog":              "Belgian_Shepherd_Dog_(Groenendael)",
+      "Shiba Inu":                     "Shiba_Inu",
+      "Basset Hound":                  "Basset_Hound",
+      "Chow Chow":                     "Chow_Chow",
+      "Irish Setter":                  "Irish_Setter",
+      "Irish Wolfhound":               "Irish_Wolfhound",
+      "Rhodesian Ridgeback":           "Rhodesian_Ridgeback",
+      "Scottish Terrier":              "Scottish_Terrier",
+      "West Highland White Terrier":   "West_Highland_White_Terrier",
+      "Airedale Terrier":              "Airedale_Terrier",
+      "Cairn Terrier":                 "Cairn_Terrier",
+      "Bull Terrier":                  "Bull_Terrier",
+      "Miniature Bull Terrier":        "Miniature_Bull_Terrier",
+      "Wire Fox Terrier":              "Wire_Fox_Terrier",
+      "Norfolk Terrier":               "Norfolk_Terrier",
+      "Great Pyrenees":                "Great_Pyrenees",
+      "Alaskan Malamute":              "Alaskan_Malamute",
+      "Portuguese Water Dog":          "Portuguese_Water_Dog",
+      "Soft Coated Wheaten Terrier":   "Soft-coated_Wheaten_Terrier",
+      "Miniature American Shepherd":   "Miniature_American_Shepherd",
+      "Italian Greyhound":             "Italian_Greyhound",
+      "Lhasa Apso":                    "Lhasa_Apso",
+      "Chinese Shar-Pei":              "Shar_Pei",
+      "Chesapeake Bay Retriever":      "Chesapeake_Bay_Retriever",
+      "Old English Sheepdog":          "Old_English_Sheepdog",
+      "Miniature Pinscher":            "Miniature_Pinscher",
+      "Norwegian Elkhound":            "Norwegian_Elkhound",
+      "Afghan Hound":                  "Afghan_Hound",
+      "Brussels Griffon":              "Brussels_Griffon",
+      "Pekingese":                     "Pekingese",
+    };
+
+    const w = document.getElementById("bpImg");
+    if (!w) return;
+
+    // ── Helper: display the fetched image ───────────────────────────────────
+    function showImg(url, credit) {
+      if (!document.getElementById("bpImg")) return;
+      // Request a 500px-wide Wikipedia thumbnail if the URL is a Wikimedia
+      // thumb URL — gives better quality without the full original file.
+      const sized = url.replace(/\/\d+px-([^\/]+)$/, '/500px-$1');
+      w.innerHTML =
+        `<img src="${sized}" alt="${breedName}"
+          style="width:100%;height:100%;object-fit:contain;"
+          onerror="
+            this.src='${url}';
+            this.onerror=function(){this.parentElement.innerHTML='<div class=\\'bpph\\'>🐕</div>';}
+          ">
+         <div class="bpcred">${credit}</div>`;
+    }
+
+    // ── Route: Dog CEO API (for breeds with composite Wikipedia images) ──────
+    if (FORCE_CEO[breedName]) {
+      const ceoSlug = FORCE_CEO[breedName];
+      fetch(`https://dog.ceo/api/breed/${ceoSlug}/images/random`)
+        .then(r => r.json())
+        .then(d => { if (d.status === "success") showImg(d.message, "Dog CEO API"); })
+        .catch(() => {});
+      return;
+    }
+
+    // ── Route: Wikipedia REST API for all other breeds ──────────────────────
+    const slug    = WIKI[breedName] || breedName.replace(/\s+/g,'_').replace(/[()]/g,'');
+    const apiUrl  = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`;
+
+    fetch(apiUrl, { headers: { Accept: 'application/json' } })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        // Prefer thumbnail.source over originalimage.source:
+        //   - thumbnail is always a single, properly generated image
+        //   - originalimage can be a raw composite, enormous file, etc.
+        const imgUrl = data.thumbnail?.source || data.originalimage?.source;
+        if (imgUrl) showImg(imgUrl, "© Wikimedia Commons");
+      })
+      .catch(() => { /* placeholder stays */ });
+
+  })(breed);
 
   drawTrend(breed);
   // Switch map to breed mode
