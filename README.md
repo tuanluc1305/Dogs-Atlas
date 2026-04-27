@@ -44,11 +44,14 @@ Two data views, one map:
 
 ## 📸 Screenshots
 
-### Dog Ownership Rate — Amber Palette
-![Ownership Rate](screenshots/ss_ownership.png)
+### National Rankings Table
+![Ownership Rate](screenshots/National_Rankings_Table.png)
 
 ### Selected Breed Popularity — Breed Mode
-![Breed Mode](screenshots/ss_breed_heat.png)
+![Breed Mode](screenshots/Selected_Breed_Popularity.png)
+
+### State panel preview
+![Ownership Rate](screenshots/State_panel_preview.png)
 
 ---
 
