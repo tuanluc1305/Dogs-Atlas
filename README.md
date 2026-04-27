@@ -4,7 +4,7 @@
 
 **Dogs Atlas** is an interactive U.S. choropleth atlas built entirely as a **single self-contained HTML file** — no server, no build step, no npm install. Open it in any browser and start exploring.
 
-![Dogs Atlas Preview](screenshots/dogs_atlas_preview.png)
+![Dogs Atlas Preview](screenshots/Dog_Ownership_Rate.png)
 
 ---
 
