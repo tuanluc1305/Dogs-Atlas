@@ -115,7 +115,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 .map-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(10,12,18,.85);border:1px solid var(--border);border-radius:16px;padding:4px 12px;font-size:.67rem;color:var(--text2);pointer-events:none;white-space:nowrap;}
 
 /* PANEL */
-.panel{width:320px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.panel{width:320px;min-width:200px;max-width:600px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .ptabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
 .ptab{flex:1;padding:10px 0;text-align:center;font-size:.68rem;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s;letter-spacing:.06em;text-transform:uppercase;border-bottom:2px solid transparent;}
 .ptab.on{color:var(--gold);border-bottom-color:var(--gold);}
@@ -175,7 +175,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 .chart-c{max-height:130px;}
 
 /* RANKINGS */
-.rk{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;flex-direction:column;max-height:250px;transition:max-height .3s;overflow:hidden;}
+.rk{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;flex-direction:column;height:250px;min-height:60px;max-height:70vh;overflow:hidden;transition:none;}
 .rkh{padding:9px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;flex-shrink:0;border-bottom:1px solid var(--border);}
 .rkt{font-family:var(--font-d);font-size:.9rem;font-weight:600;}
 .rkm{font-size:.65rem;color:var(--text3);}
@@ -196,7 +196,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 .nty{color:var(--text2);text-align:center;width:40px;}
 .ntd{font-weight:600;font-size:.68rem;text-align:center;width:40px;}
 canvas.spark{width:68px !important;height:24px !important;}
-.rk.col{max-height:38px;}
+.rk.col{height:38px !important;min-height:38px;}
 .rk.col .rkwrap{display:none;}
 .rk.col .chev{transform:rotate(180deg);}
 
@@ -209,6 +209,30 @@ canvas.spark{width:68px !important;height:24px !important;}
   .main{flex-direction:column;height:auto;}
   .map-col{height:55vw;min-height:240px;}
   .panel{width:100%;border-left:none;border-top:1px solid var(--border);height:380px;}
+}
+
+/* ── RESIZE HANDLES ──────────────────────────────────── */
+.drag-handle-v{
+  width:5px;flex-shrink:0;cursor:col-resize;
+  background:var(--border);position:relative;z-index:10;
+  transition:background .15s;
+}
+.drag-handle-v:hover,.drag-handle-v.dragging{background:var(--gold-dim);}
+.drag-handle-v::after{
+  content:"";position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:1px;height:32px;background:var(--border2);border-radius:1px;
+}
+.drag-handle-h{
+  height:5px;flex-shrink:0;cursor:row-resize;
+  background:var(--border);position:relative;z-index:10;
+  transition:background .15s;
+}
+.drag-handle-h:hover,.drag-handle-h.dragging{background:var(--gold-dim);}
+.drag-handle-h::after{
+  content:"";position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  height:1px;width:32px;background:var(--border2);border-radius:1px;
 }
 </style>
 </head>
@@ -273,6 +297,7 @@ canvas.spark{width:68px !important;height:24px !important;}
     <div class="map-hint" id="mapHint">Click a state to explore · Select a breed to see its range</div>
   </div>
 
+  <div class="drag-handle-v" id="dragV" title="Drag to resize"></div>
   <div class="panel">
     <div class="ptabs">
       <div class="ptab on" id="tabState" onclick="switchTab('state')">State</div>
@@ -284,6 +309,7 @@ canvas.spark{width:68px !important;height:24px !important;}
   </div>
 </div>
 
+<div class="drag-handle-h" id="dragH" title="Drag to resize"></div>
 <div class="rk" id="rk">
   <div class="rkh" onclick="toggleRk()">
     <div class="rkt">National Breed Rankings</div>
@@ -922,7 +948,14 @@ function drawSparks(rows){
 }
 
 function hlRow(b){ document.querySelectorAll("#nrtBody tr").forEach(r=>r.classList.toggle("hl",r.dataset.b===b)); }
-function toggleRk(){ document.getElementById("rk").classList.toggle("col"); }
+function toggleRk(){
+  const rk = document.getElementById("rk");
+  rk.classList.toggle("col");
+  // Restore height when expanding back
+  if(!rk.classList.contains("col") && (rk.style.height === "38px" || !rk.style.height)){
+    rk.style.height = "250px";
+  }
+}
 
 /* ════════════════════════════════════════
    SELECTION
@@ -1139,6 +1172,124 @@ document.addEventListener("DOMContentLoaded",()=>{
   renderTable();
   drawLegend();
 });
+/* ════════════════════════════════════════
+   RESIZE ENGINE
+════════════════════════════════════════ */
+(function initResize(){
+
+  // ── Vertical handle: resize map ↔ panel ──────────────────────────────────
+  const dragV  = document.getElementById('dragV');
+  const mapCol = document.getElementById('mapCol');
+  const panel  = document.querySelector('.panel');
+
+  let vDragging = false, vStartX = 0, vStartPanelW = 0;
+
+  dragV.addEventListener('mousedown', e=>{
+    vDragging = true;
+    vStartX = e.clientX;
+    vStartPanelW = panel.getBoundingClientRect().width;
+    dragV.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  // ── Horizontal handle: resize main section ↔ rankings table ──────────────
+  const dragH = document.getElementById('dragH');
+  const main  = document.querySelector('.main');
+  const rk    = document.getElementById('rk');
+
+  let hDragging = false, hStartY = 0, hStartRkH = 0;
+
+  dragH.addEventListener('mousedown', e=>{
+    // Don't trigger if rankings is collapsed
+    if(rk.classList.contains('col')) return;
+    hDragging = true;
+    hStartY   = e.clientY;
+    hStartRkH = rk.getBoundingClientRect().height;
+    dragH.classList.add('dragging');
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  // ── Shared mousemove ──────────────────────────────────────────────────────
+  window.addEventListener('mousemove', e=>{
+    if(vDragging){
+      const dx      = vStartX - e.clientX;           // dragging left = grow panel
+      const newW    = Math.min(600, Math.max(200, vStartPanelW + dx));
+      panel.style.width = newW + 'px';
+      // Map fills the rest automatically via flex:1
+    }
+
+    if(hDragging){
+      const dy      = hStartY - e.clientY;           // dragging up = grow table
+      const newH    = Math.min(window.innerHeight * 0.7, Math.max(60, hStartRkH + dy));
+      rk.style.height = newH + 'px';
+      // main section fills remaining height via flex:1
+    }
+  });
+
+  // ── Shared mouseup ────────────────────────────────────────────────────────
+  window.addEventListener('mouseup', ()=>{
+    if(vDragging){
+      vDragging = false;
+      dragV.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    if(hDragging){
+      hDragging = false;
+      dragH.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+
+  // ── Touch support ─────────────────────────────────────────────────────────
+  dragV.addEventListener('touchstart', e=>{
+    vDragging = true;
+    vStartX = e.touches[0].clientX;
+    vStartPanelW = panel.getBoundingClientRect().width;
+    e.preventDefault();
+  }, {passive:false});
+
+  dragH.addEventListener('touchstart', e=>{
+    if(rk.classList.contains('col')) return;
+    hDragging = true;
+    hStartY = e.touches[0].clientY;
+    hStartRkH = rk.getBoundingClientRect().height;
+    e.preventDefault();
+  }, {passive:false});
+
+  window.addEventListener('touchmove', e=>{
+    if(vDragging){
+      const dx   = vStartX - e.touches[0].clientX;
+      const newW = Math.min(600, Math.max(200, vStartPanelW + dx));
+      panel.style.width = newW + 'px';
+    }
+    if(hDragging){
+      const dy   = hStartY - e.touches[0].clientY;
+      const newH = Math.min(window.innerHeight*0.7, Math.max(60, hStartRkH + dy));
+      rk.style.height = newH + 'px';
+    }
+  }, {passive:false});
+
+  window.addEventListener('touchend', ()=>{
+    vDragging = false; hDragging = false;
+  });
+
+  // ── Double-click: snap back to default sizes ──────────────────────────────
+  dragV.addEventListener('dblclick', ()=>{
+    panel.style.width = '320px';
+  });
+  dragH.addEventListener('dblclick', ()=>{
+    if(!rk.classList.contains('col')) rk.style.height = '250px';
+  });
+
+})();
+
+
 </script>
 </body>
 </html>
