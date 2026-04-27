@@ -175,4 +175,4 @@ MIT — fork it, adapt it, build on it.
 
 ---
 
-*Developed by Luc Lu*
+*Developed by Tuan Luc Lu*
